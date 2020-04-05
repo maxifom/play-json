@@ -1,6 +1,8 @@
 Play JSON
 =========
 
+FORK of playframework/play-json with conditional BigInteger parsing to string when its bigger than JS.MAX_SAFE_INTEGER
+
 Play JSON is a powerful Scala JSON library, originally developed by the Play team for use with Play Framework. It uses Jackson for JSON parsing and has no Play dependencies.
 
 We've provided some documentation here on how to use Play JSON in your app (without Play). For more information on how to use Play JSON in Play, please refer to the [Play documentation](https://www.playframework.com/documentation/2.7.x/ScalaJson).
