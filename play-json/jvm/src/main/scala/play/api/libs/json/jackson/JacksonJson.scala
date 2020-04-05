@@ -49,7 +49,7 @@ import play.api.libs.json._
  * }}}
  */
 sealed class PlayJsonModule(parserSettings: JsonParserSettings)
-    extends SimpleModule("PlayJson", Version.unknownVersion()) {
+  extends SimpleModule("PlayJson", Version.unknownVersion()) {
   override def setupModule(context: SetupContext): Unit = {
     context.addDeserializers(new PlayDeserializers(parserSettings))
     context.addSerializers(new PlaySerializers(parserSettings))
@@ -62,8 +62,9 @@ object PlayJsonModule extends PlayJsonModule(JsonParserSettings())
 // -- Serializers.
 
 private[jackson] class JsValueSerializer(parserSettings: JsonParserSettings) extends JsonSerializer[JsValue] {
+
   import java.math.BigInteger
-  import java.math.{ BigDecimal => JBigDec }
+  import java.math.{BigDecimal => JBigDec}
 
   import com.fasterxml.jackson.databind.node.BigIntegerNode
   import com.fasterxml.jackson.databind.node.DecimalNode
@@ -79,15 +80,22 @@ private[jackson] class JsValueSerializer(parserSettings: JsonParserSettings) ext
           va < parserSettings.bigDecimalSerializerSettings.maxPlain && va > parserSettings.bigDecimalSerializerSettings.minPlain
         }
         val stripped = v.bigDecimal.stripTrailingZeros
-        val raw      = if (shouldWritePlain) stripped.toPlainString else stripped.toString
+        val raw = if (shouldWritePlain) stripped.toPlainString else stripped.toString
 
-        if (raw.indexOf('E') < 0 && raw.indexOf('.') < 0)
-          json.writeTree(new BigIntegerNode(new BigInteger(raw)))
+        if (raw.indexOf('E') < 0 && raw.indexOf('.') < 0) {
+          val bigInt = new BigInteger(raw)
+          val maxSafeInt = new BigInteger("9007199254740991")
+          if (bigInt.compareTo(maxSafeInt) > 0) {
+              json.writeString(bigInt.toString())
+          }
+          else
+            json.writeTree(new BigIntegerNode(bigInt))
+        }
         else
           json.writeTree(new DecimalNode(new JBigDec(raw)))
       }
 
-      case JsString(v)  => json.writeString(v)
+      case JsString(v) => json.writeString(v)
       case JsBoolean(v) => json.writeBoolean(v)
 
       case JsArray(elements) => {
@@ -124,19 +132,20 @@ private[jackson] case class ReadingList(content: mutable.ArrayBuffer[JsValue]) e
 
 // Context for reading an Object
 private[jackson] case class KeyRead(content: ListBuffer[(String, JsValue)], fieldName: String)
-    extends DeserializerContext {
+  extends DeserializerContext {
   def addValue(value: JsValue): DeserializerContext = ReadingMap(content += (fieldName -> value))
 }
 
 // Context for reading one item of an Object (we already red fieldName)
 private[jackson] case class ReadingMap(content: ListBuffer[(String, JsValue)]) extends DeserializerContext {
   def setField(fieldName: String) = KeyRead(content, fieldName)
+
   def addValue(value: JsValue): DeserializerContext =
     throw new Exception("Cannot add a value on an object without a key, malformed JSON object!")
 }
 
 private[jackson] class JsValueDeserializer(factory: TypeFactory, klass: Class[_], parserSettings: JsonParserSettings)
-    extends JsonDeserializer[Object] {
+  extends JsonDeserializer[Object] {
   override def isCachable: Boolean = true
 
   override def deserialize(jp: JsonParser, ctxt: DeserializationContext): JsValue = {
@@ -149,10 +158,10 @@ private[jackson] class JsValueDeserializer(factory: TypeFactory, klass: Class[_]
   }
 
   private def parseBigDecimal(
-      jp: JsonParser,
-      parserContext: List[DeserializerContext]
-  ): (Some[JsNumber], List[DeserializerContext]) = {
-    val inputText   = jp.getText
+                               jp: JsonParser,
+                               parserContext: List[DeserializerContext]
+                             ): (Some[JsNumber], List[DeserializerContext]) = {
+    val inputText = jp.getText
     val inputLength = inputText.length
 
     // There is a limit of how large the numbers can be since parsing extremely
@@ -177,10 +186,10 @@ private[jackson] class JsValueDeserializer(factory: TypeFactory, klass: Class[_]
 
   @tailrec
   final def deserialize(
-      jp: JsonParser,
-      ctxt: DeserializationContext,
-      parserContext: List[DeserializerContext]
-  ): JsValue = {
+                         jp: JsonParser,
+                         ctxt: DeserializationContext,
+                         parserContext: List[DeserializerContext]
+                       ): JsValue = {
     if (jp.getCurrentToken == null) {
       jp.nextToken()
     }
@@ -201,7 +210,7 @@ private[jackson] class JsValueDeserializer(factory: TypeFactory, klass: Class[_]
       case JsonTokenId.ID_END_ARRAY =>
         parserContext match {
           case ReadingList(content) :: stack => (Some(JsArray(content)), stack)
-          case _                             => throw new RuntimeException("We should have been reading list, something got wrong")
+          case _ => throw new RuntimeException("We should have been reading list, something got wrong")
         }
 
       case JsonTokenId.ID_START_OBJECT => (None, ReadingMap(ListBuffer()) +: parserContext)
@@ -209,13 +218,13 @@ private[jackson] class JsValueDeserializer(factory: TypeFactory, klass: Class[_]
       case JsonTokenId.ID_FIELD_NAME =>
         parserContext match {
           case (c: ReadingMap) :: stack => (None, c.setField(jp.getCurrentName) +: stack)
-          case _                        => throw new RuntimeException("We should be reading map, something got wrong")
+          case _ => throw new RuntimeException("We should be reading map, something got wrong")
         }
 
       case JsonTokenId.ID_END_OBJECT =>
         parserContext match {
           case ReadingMap(content) :: stack => (Some(JsObject(content)), stack)
-          case _                            => throw new RuntimeException("We should have been reading an object, something got wrong")
+          case _ => throw new RuntimeException("We should have been reading an object, something got wrong")
         }
 
       case JsonTokenId.ID_NOT_AVAILABLE =>
